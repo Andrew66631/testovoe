@@ -9,27 +9,29 @@ use Symfony\Component\HttpFoundation\Response;
 class PersonController extends AbstractController
 {
     public function getManyPeopleToYear(): Response
-    {
-        $entityManager = $this->getDoctrine()->getManager();
+{
+    $entityManager = $this->getDoctrine()->getManager();
 
-        for ($i = 0; $i < 100; $i++) {
-            $person = new Person();
-            $person->setBirthYear(rand(1900, 2000));
-            $person->setDeathYear(rand($person->getBirthYear(), 2021));
-            $entityManager->persist($person);
+    $peopleByYear = $entityManager->getRepository(Person::class)->createQueryBuilder('p')
+        ->select('p.birthYear as year, COUNT(p.id) as people_count')
+        ->where('p.birthYear <= :currentYear AND (p.deathYear IS NULL OR p.deathYear >= :currentYear)')
+        ->setParameter('currentYear', 2021)
+        ->groupBy('year')
+        ->orderBy('people_count', 'DESC')
+        ->getQuery()
+        ->getResult();
+
+    $maxPeopleCount = $peopleByYear[0]['people_count'];
+    $yearsWithMaxPeople = [];
+
+    foreach ($peopleByYear as $personData) {
+        if ($personData['people_count'] === $maxPeopleCount) {
+            $yearsWithMaxPeople[] = $personData['year'];
+        } else {
+            break;
         }
-
-        $entityManager->flush();
-
-        $peopleByYear = $entityManager->getRepository(Person::class)->createQueryBuilder('p')
-            ->select('p.birthYear, COUNT(p.id) as people_count')
-            ->groupBy('p.birthYear')
-            ->orderBy('people_count', 'DESC')
-            ->getQuery()
-            ->getResult();
-
-        $yearWithMostPeople = $peopleByYear[0]['birthYear'];
-
-        return new Response("Год, когда жило больше всего людей: " . $yearWithMostPeople);
     }
+
+    return new Response("Годы, когда жило максимальное количество людей: " . implode(', ', $yearsWithMaxPeople));
+}
 }
